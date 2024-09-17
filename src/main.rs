@@ -47,3 +47,18 @@ let _init = esp_wifi::initialize(
         delay.delay(500.millis());
     }
 }
+
+
+//use warp::Filter;
+
+// #[tokio::main]
+// async fn main() {
+//     // Define the route
+//     let hello = warp::path::end()
+//         .map(|| warp::reply::html("Hello, World!"));
+
+//     // Start the server
+//     warp::serve(hello)
+//         .run(([127, 0, 0, 1], 3030))
+//         .await;
+// }
