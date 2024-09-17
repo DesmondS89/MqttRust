@@ -14,7 +14,7 @@ esp-backtrace = { version = "0.14.0", features = [
 ] }
 
 warp = "0.3" # Warp is a fast, efficient, and secure web server written in Rust.
-tokio = { version = "1", features = ["full"] } # Tokio is an asynchronous runtime for the Rust programming language.
+tokio = { version = "1.40.0", features = ["full"] } # Tokio is an asynchronous runtime for the Rust programming language.
 
 esp-hal = { version = "0.20.1", features = [ "esp32" ] }
 esp-println = { version = "0.11.0", features = ["esp32", "log"] }
