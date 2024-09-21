@@ -24,14 +24,8 @@ use esp_idf_svc::mqtt::client::EspMqttEvent;
 // region variables
 const WIFI_SSID: &str = "Wokwi-GUEST";
 const WIFI_PASSWORD: &str = "";
-//broker.mqttdashboard.com
 const MQTT_BROKER_URL: &str = "mqtt://broker.mqttdashboard.com:1883";
-// const MQTT_BROKER_URL: &str = "mqtts://6804c12a8e254e5c9f0d45b0ea9c0b2a.s1.eu.hivemq.cloud:8883";
-// const MQTT_PORT: u16 = 8883;
 const MQTT_TOPIC: &str = "testtopic/1";
-// const MQTT_CLIENT_ID: &str = "esp32";
-// const MQTT_USERNAME: &str = "hivemq.webclient.1726606709307";
-// const MQTT_PASSWORD: &str = "9wD6c7YmrP<tIi!5VL#>";
 
 // endregion
 
@@ -60,49 +54,6 @@ fn main() -> anyhow::Result<()> {
 
     // Create MQTT Client Configuration
     connect_mqtt()?;
-    // let mqtt_config = MqttClientConfiguration::default();
-
-    // // let mqtt_config = MqttClientConfiguration {
-    // //     client_id: Some(MQTT_CLIENT_ID.into()),
-    // //     username: Some(MQTT_USERNAME.into()),
-    // //     password: Some(MQTT_PASSWORD.into()),
-    // //     keep_alive_interval: Some(Duration::from_secs(60)),
-    // //     ..Default::default()
-    // // };
-
-    // info!("MQTT Configuration Created to broker: {}", MQTT_BROKER_URL);
-
-    // // Create MQTT Client
-    // // let (mut client, mut connection) = EspMqttClient::new(MQTT_BROKER_URL, &mqtt_config)?;
-
-    // let (mut client, mut connection) = EspMqttClient::new(
-    //     "mqtt://broker.mqttdashboard.com",
-    //     &mqtt_config)?;
-
-    // info!("MQTT Connection Created");
-
-    // // Connect to MQTT Broker
-    // info!("Connected to MQTT Broker");
-
-    // // Subscribe to MQTT Topic
-    // client.subscribe(MQTT_TOPIC.into(), QoS::AtLeastOnce)?;
-    // info!("Subscribed to MQTT Topic");
-
-    // // Publish to MQTT Topic
-    // client.publish(
-    //     MQTT_TOPIC.into(),
-    //     QoS::AtLeastOnce,
-    //     false,
-    //     "Hello World".as_bytes(),
-    // )?;
-
-    // info!("Published to MQTT Topic");
-
-    // Wait for messages
-    // loop {
-    //     let message = connection.receive()?;
-    //     info!("Received message: {:?}", message);
-    // }
 
     server.fn_handler("/", Method::Get, |req| {
         req.into_ok_response()?
@@ -121,24 +72,12 @@ fn main() -> anyhow::Result<()> {
         req.into_ok_response()?;
         let form_data: FormData = serde_urlencoded::from_bytes(&body).unwrap();
         let message = form_data.message;
-        
-        // let (mut client, mut connection) = EspMqttClient::new(MQTT_BROKER_URL, &mqtt_config)?;
-
-        // client.publish(
-        //     MQTT_TOPIC.into(),
-        //     QoS::AtLeastOnce,
-        //     false,
-        //     message.as_bytes(),
-        // )?;
 
         Ok(())
     })?;
     info!("Server routes added");
 
-    // core::mem::forget(wifi);
     core::mem::forget(server);
-    // core::mem::forget(client);
-
     // Main task no longer needed, free up some memory
     Ok(())
 }
