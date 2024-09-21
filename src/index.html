@@ -36,6 +36,7 @@
 
     <div class="container">
         <h1>Send Data to ESP32 Web Server</h1>
+        <p>Click the buttons below to send data to the ESP32 Web Server</p>
         <button id="button1">Send String 1</button>
         <button id="button2">Send String 2</button>
     </div>
@@ -43,7 +44,7 @@
     <script>
         // Function to send a POST request with the string data
         function sendString(data) {
-            fetch("/", { // Change "/" to the correct endpoint on your server
+            fetch("/", { // I set the URL to "/" because the server is running on the same domain
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
