@@ -1,37 +1,46 @@
-use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use anyhow;
-use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
+
+use embedded_svc::{
+    http::{Headers, Method},
+    io::{Read, Write},
+    wifi::{self, AuthMethod, ClientConfiguration, Configuration},
+};
 use esp_idf_hal::peripherals::Peripherals;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::http::server::EspHttpServer;
 use esp_idf_svc::mqtt::client::{EspMqttClient, MqttClientConfiguration};
 use esp_idf_svc::mqtt::client::{EspMqttConnection, QoS};
+use embedded_svc::mqtt::client::Event;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::{BlockingWifi, EspWifi};
 use heapless::String;
+use log::*;
 use serde::{Deserialize, Serialize};
+use serde_urlencoded;
 use std::str::FromStr;
 use std::{thread::sleep, time::Duration};
-
-#[derive(Serialize, Deserialize)]
-struct ApiResponse {
-    status: u16,
-    message: heapless::String<64>,
-}
+use esp_idf_svc::mqtt::client::EspMqttEvent;
 
 // region variables
-const WIFI_SSID: &str = "D-Link-2BE3C3";
-const WIFI_PASSWORD: &str = "K3RazVjHpN";
-const MQTT_BROKER_URL: &str = "mqtt://6804c12a8e254e5c9f0d45b0ea9c0b2a.s1.eu.hivemq.cloud:8883";
-const MQTT_PORT: u16 = 8883;
+const WIFI_SSID: &str = "Wokwi-GUEST";
+const WIFI_PASSWORD: &str = "";
+//broker.mqttdashboard.com
+const MQTT_BROKER_URL: &str = "mqtt://broker.mqttdashboard.com:1883";
+// const MQTT_BROKER_URL: &str = "mqtts://6804c12a8e254e5c9f0d45b0ea9c0b2a.s1.eu.hivemq.cloud:8883";
+// const MQTT_PORT: u16 = 8883;
 const MQTT_TOPIC: &str = "testtopic/1";
-const MQTT_CLIENT_ID: &str = "esp32";
-const MQTT_USERNAME: &str = "hivemq.webclient.1726606709307";
-const MQTT_PASSWORD: &str = "9wD6c7YmrP<tIi!5VL#>";
+// const MQTT_CLIENT_ID: &str = "esp32";
+// const MQTT_USERNAME: &str = "hivemq.webclient.1726606709307";
+// const MQTT_PASSWORD: &str = "9wD6c7YmrP<tIi!5VL#>";
 
 // endregion
 
-#[actix_web::main]
-async fn main() -> std::io::Result() {
+#[derive(Deserialize)]
+struct FormData {
+    message: String<128>,
+}
+
+fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once.
     // Otherwise some patches to the runtime
     // implemented by esp-idf-sys might not link properly.
@@ -39,277 +48,210 @@ async fn main() -> std::io::Result() {
     // for more information.
     // Try to uncomment the line below and see if the build fails.
     esp_idf_sys::link_patches();
+    esp_idf_svc::log::EspLogger::initialize_default();
+    log::set_max_level(log::LevelFilter::Debug);
 
+    let mut server = create_server()?;
+
+    info!("Server started");
+
+    // Create MQTT Connection
+    info!("Creating MQTT Connection");
+
+    // Create MQTT Client Configuration
+    connect_mqtt()?;
+    // let mqtt_config = MqttClientConfiguration::default();
+
+    // // let mqtt_config = MqttClientConfiguration {
+    // //     client_id: Some(MQTT_CLIENT_ID.into()),
+    // //     username: Some(MQTT_USERNAME.into()),
+    // //     password: Some(MQTT_PASSWORD.into()),
+    // //     keep_alive_interval: Some(Duration::from_secs(60)),
+    // //     ..Default::default()
+    // // };
+
+    // info!("MQTT Configuration Created to broker: {}", MQTT_BROKER_URL);
+
+    // // Create MQTT Client
+    // // let (mut client, mut connection) = EspMqttClient::new(MQTT_BROKER_URL, &mqtt_config)?;
+
+    // let (mut client, mut connection) = EspMqttClient::new(
+    //     "mqtt://broker.mqttdashboard.com",
+    //     &mqtt_config)?;
+
+    // info!("MQTT Connection Created");
+
+    // // Connect to MQTT Broker
+    // info!("Connected to MQTT Broker");
+
+    // // Subscribe to MQTT Topic
+    // client.subscribe(MQTT_TOPIC.into(), QoS::AtLeastOnce)?;
+    // info!("Subscribed to MQTT Topic");
+
+    // // Publish to MQTT Topic
+    // client.publish(
+    //     MQTT_TOPIC.into(),
+    //     QoS::AtLeastOnce,
+    //     false,
+    //     "Hello World".as_bytes(),
+    // )?;
+
+    // info!("Published to MQTT Topic");
+
+    // Wait for messages
+    // loop {
+    //     let message = connection.receive()?;
+    //     info!("Received message: {:?}", message);
+    // }
+
+    server.fn_handler("/", Method::Get, |req| {
+        req.into_ok_response()?
+            .write_all(create_html_response().as_bytes())
+            .map(|_| ())
+    })?;
+
+    // add route for publishing message to mqtt broker when the data is sent from the form
+    server.fn_handler("/", Method::Post, move |mut req| -> anyhow::Result<()> {
+        let mut body = Vec::new();
+        req.read(&mut body)?;
+
+        let mut body_string: String<1024> = String::new();
+        body_string.push_str(std::str::from_utf8(&body).unwrap()).unwrap();
+
+        req.into_ok_response()?;
+        let form_data: FormData = serde_urlencoded::from_bytes(&body).unwrap();
+        let message = form_data.message;
+        
+        // let (mut client, mut connection) = EspMqttClient::new(MQTT_BROKER_URL, &mqtt_config)?;
+
+        // client.publish(
+        //     MQTT_TOPIC.into(),
+        //     QoS::AtLeastOnce,
+        //     false,
+        //     message.as_bytes(),
+        // )?;
+
+        Ok(())
+    })?;
+    info!("Server routes added");
+
+    // core::mem::forget(wifi);
+    core::mem::forget(server);
+    // core::mem::forget(client);
+
+    // Main task no longer needed, free up some memory
+    Ok(())
+}
+
+// load the html form to be displayed on the web page when the server is accessed via a browser or client application
+fn create_html_response() -> String<1024> {
+    // the html page is in a external file
+    let html = include_str!("index.html");
+    let mut html_string: String<1024> = String::new();
+    html_string.push_str(html).unwrap();
+    return html_string;
+}
+
+fn create_server() -> anyhow::Result<EspHttpServer<'static>> {
     let peripherals = Peripherals::take().unwrap();
-    let sysloop = EspSystemEventLoop::take()?;
+    let sys_loop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
-    // Initializes a mutable `wifi` instance by wrapping an `EspWifi` object with `BlockingWifi`.
-    //
-    // The `EspWifi` object is created using the provided modem peripheral, system event loop,
-    // and an optional non-volatile storage (NVS) reference. The `BlockingWifi::wrap` function
-    // is then used to create a blocking Wi-Fi instance, which is assigned to `wifi`.
-    //
-    // # Parameters
-    // - `peripherals.modem`: The modem peripheral used for Wi-Fi.
-    // - `sysloop`: The system event loop used for handling Wi-Fi events.
-    // - `nvs`: An optional reference to non-volatile storage (NVS).
-    //
-    // # Returns
-    // A result containing the initialized `wifi` instance or an error if the initialization fails.
+    // configurare wifi in modalità client
     let mut wifi = BlockingWifi::wrap(
-        EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs))?,
-        sysloop,
+        EspWifi::new(peripherals.modem, sys_loop.clone(), Some(nvs))?,
+        sys_loop,
     )?;
 
-    wifi.set_configuration(&Configuration::Client(ClientConfiguration {
-        ssid: heapless::String::<32>::from_str(WIFI_SSID).unwrap(),
-        bssid: None,
+    connect_wifi(&mut wifi)?;
+
+    info!(
+        "Connected Wi-Fi with WIFI_SSID `{}` and WIFI_PASS `{}`",
+        WIFI_SSID, WIFI_PASSWORD
+    );
+
+    let server_configuration = esp_idf_svc::http::server::Configuration {
+        ..Default::default()
+    };
+
+    // Keep wifi running beyond when this function returns (forever)
+    // Do not call this if you ever want to stop or access it later.
+    // Otherwise it should be returned from this function and kept somewhere
+    // so it does not go out of scope.
+    // https://doc.rust-lang.org/stable/core/mem/fn.forget.html
+    core::mem::forget(wifi);
+
+    Ok(EspHttpServer::new(&server_configuration)?)
+}
+
+// Connect to Wi-Fi network with the provided SSID and password. This function is blocking.
+// It will return once the Wi-Fi connection is established. If the connection fails, an error will be returned.
+// The Wi-Fi connection is established using the provided `wifi` instance.
+// The Wi-Fi configuration is set to client mode with the provided SSID and password.
+// The Wi-Fi connection is started, and the connection is established.
+// The network interface is then brought up.
+// If the connection is successful, the function will return `Ok(())`.
+// If the connection fails, an error will be returned.
+fn connect_wifi(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    let wifi_configuration: Configuration = Configuration::Client(ClientConfiguration {
+        ssid: WIFI_SSID.try_into().unwrap(),
+        // bssid: None,
+        // auth_method: AuthMethod::WPA2Personal,
         auth_method: AuthMethod::None,
-        password: heapless::String::<64>::try_from(WIFI_PASSWORD).unwrap(),
+        password: WIFI_PASSWORD.try_into().unwrap(),
         channel: None,
-        scan_method: todo!(),
-        pmf_cfg: todo!(),
-    }))?;
+        ..Default::default()
+    });
 
-    // Start Wifi
+    wifi.set_configuration(&wifi_configuration)?;
+
     wifi.start()?;
+    info!("Wifi started successfully");
 
-    // Connect Wifi
+    // Connect in dhcp mode with default timeout of 10 seconds
     wifi.connect()?;
+    info!("Wifi connected");
 
-    // Wait until the network interface is up
+    // Wait until the network interface is up with default timeout of 10 seconds
     wifi.wait_netif_up()?;
+    info!("Wifi netif up");
+
 
     // Print Out Wifi Connection Configuration
     while !wifi.is_connected().unwrap() {
         // Get and print connection configuration
         let config = wifi.get_configuration().unwrap();
-        println!("Waiting for station {:?}", config);
+        info!("Waiting for station {:?}", config);
     }
 
-    println!("Wifi Connected");
+    info!("Wifi Connected");
 
-    // Wait for IP Address
-    while wifi.is_connected().unwrap_or(false) {
-        println!("Waiting for IP Address");
-        sleep(Duration::from_secs(1));
-    }
+    Ok(())
+}
 
-    // println!("IP Address: {:?}", wifi.get_ip_address()?);
-
-    // Create a Web Client
-    let mqtt_config = MqttClientConfiguration {
-        client_id: Some(MQTT_CLIENT_ID.into()),
-        username: Some(MQTT_USERNAME.into()),
-        password: Some(MQTT_PASSWORD.into()),
-        keep_alive_interval: Some(Duration::from_secs(60)),
-        protocol_version: Default::default(),
-        connection_refresh_interval: Duration::from_secs(30),
-        reconnect_timeout: None,
-        network_timeout: Duration::from_secs(30),
-        lwt: None,
-        disable_clean_session: false,
-        task_prio: 1, // Set a valid priority value
-        task_stack: 4096,
-        buffer_size: 1024,
-        out_buffer_size: 1024,
-        use_global_ca_store: false,
-        skip_cert_common_name_check: false,
-        crt_bundle_attach: None,
-        server_certificate: None,
-        client_certificate: None,
-        private_key: None,
-        private_key_password: None,
-    };
-
-    let (mut client, mut connection) = EspMqttClient::new(MQTT_BROKER_URL, &mqtt_config)?;
-    // Create API Response
-    let response = crate::ApiResponse {
-        status: 200,
-        message: heapless::String::<64>::from_str("Hello World").unwrap(),
-    };
-
-    // Create MQTT Client Configuration
-    let mqtt_config = MqttClientConfiguration {
-        client_id: Some(MQTT_CLIENT_ID.into()),
-        username: Some(MQTT_USERNAME.into()),
-        password: Some(MQTT_PASSWORD.into()),
-        keep_alive_interval: Some(Duration::from_secs(60)),
+fn connect_mqtt() -> Result<(), anyhow::Error> {
+    let conf = MqttClientConfiguration {
+        client_id: Some("test_client_id"),
         ..Default::default()
     };
+    let (mut client, mut connection) = EspMqttClient::new(MQTT_BROKER_URL, &conf)?;
+    info!("Connected to MQTT Broker");
+    
+    client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"hello world")?;
 
-    // Create MQTT Client
-    let (mut client, mut connection) = EspMqttClient::new(MQTT_BROKER_URL, &mqtt_config)?;
-
-    // Subscribe to MQTT Topic
-    client.subscribe(MQTT_TOPIC.into(), QoS::AtLeastOnce)?;
-
-    // Publish to MQTT Topic
-    client.publish(
-        MQTT_TOPIC.into(),
-        QoS::AtLeastOnce,
-        false,
-        "Hello World".as_bytes(),
-    )?;
-
-    // Event mqtt loop
-    // while let Some(event) = connection.next() {
-    //     match event {
-    //         Err(e) => {
-    //             println!("MQTT Error: {:?}", e);
-    //         }
-    //         Ok(event) => match event {
-    //             Event::Connected(_) => {
-    //                 println!("Connected to MQTT Broker");
-    //             }
-    //             Event::Publish(publish) => {
-    //                 println!(
-    //                     "Received message on topic '{}': {}",
-    //                     publish.topic, publish.payload
-    //                 );
-    //             }
-    //             Event::Disconnected(_) => {
-    //                 println!("Disconnected from MQTT Broker");
-    //             }
-    //             _ => {}
-    //         },
-    //     }
-    // }
-
-    // Event Loop
-    // while let Some(event) = connection.next() {
-    //     match event {
-    //         Err(e) => {
-    //             println!("MQTT Error: {:?}", e);
-    //         }
-    //         Ok(event) => match event {
-    //             Event::Connected(_) => {
-    //                 println!("Connected to MQTT Broker");
-    //             }
-    //             Event::Publish(publish) => {
-    //                 println!(
-    //                     "Received message on topic '{}': {}",
-    //                     publish.topic, publish.payload
-    //                 );
-    //             }
-    //             Event::Disconnected(_) => {
-    //                 println!("Disconnected from MQTT Broker");
-    //             }
-    //             _ => {}
-    //         },
-    //     }
-    // }
-
-    HttpServer::new(|| App::new().service(hello))
-        .bind(("localhost", 5001))?
-        .run()
-        .await?;
-
-    loop {
-        // Keep waking up device to avoid watchdog reset
-        sleep(Duration::from_millis(1000));
+    info!("Message published");
+    // Ensure the connection loop is running
+    while let Ok(msg) = connection.next() {
+        info!("New message received");
+        // match msg {
+        //     EspMqttEvent::Received(received) => {
+        //         println!("Received message on topic: {}", received.topic());
+        //         println!("Message payload: {:?}", received.data());
+        //     }
+        //     _ => {
+        //         println!("Other MQTT event");
+        //     }
+        // }
     }
-}
-
-// crea elenco di endpoint per il server web
-// fn create_endpoints() -> Vec<ApiEndpoint> {
-//     return vec![
-//         ApiEndpoint {
-//             method: HttpMethod::Get,
-
-//         },
-//         ApiEndpoint {
-//             method: HttpMethod::Post,
-//         },
-//     ]
-// }
-
-// Configura il server web
-
-fn configure_webserver() {
-    // Create a new instance of the `EspWebServer` struct.
-    // The `EspWebServer` struct is created using the provided system event loop and
-    // an optional non-volatile storage (NVS) reference.
-    // The `EspWebServer::new` function is then used to create a new instance of the `EspWebServer` struct.
-    // The created instance is assigned to the `server` variable.
-    let server = EspWebServer::new(sysloop.clone(), Some(nvs))?;
-
-    // Creo un endpoint per il server web
-    let endpoint = ApiEndpoint {
-        method: HttpMethod::Get,
-    };
-
-    // Register the endpoint with the server
-    // The `register` method is called on the `server` instance to register the `endpoint` with the server.
-    // The `register` method returns a result containing the registered endpoint or an error if the registration fails.
-    // The registered endpoint is assigned to the `endpoint` variable.
-    let endpoint = server.register(endpoint)?;
-
-    // Set the handler for the endpoint
-    // The `set_handler` method is called on the `endpoint` instance to set the handler for the endpoint.
-    // The `set_handler` method takes a closure as an argument, which is used to define the handler logic.
-    // The handler logic is defined as a closure that takes a request and returns a response.
-    // The `set_handler` method returns a result containing the endpoint or an error if the handler setting fails.
-    // The endpoint with the handler set is assigned to the `endpoint` variable.
-    let endpoint = endpoint.set_handler(|request| {
-        // Create an HTML response
-        // The `create_html_response` function is called to create an HTML response.
-        // The HTML response is assigned to the `response` variable.
-        let response = create_html_response();
-
-        // Return the response
-        // The response is returned from the handler closure.
-        // The response is returned as an `Ok` variant of the `Result` enum.
-        // The `Ok` variant contains the response.
-        Ok(response)
-    });
-
-    // Start the server
-    // The `start` method is called on the `server` instance to start the server.
-    // The `start` method returns a result containing the server instance or an error if the server fails to start.
-    // The server instance is assigned to the `server` variable.
-    let server = server.start()?;
-
-    // Print the server address
-    // The `get_address` method is called on the `server` instance to get the server address.
-    // The server address is printed to the console.
-    println!("Server started at {}", server.get_address());
-
-    // Return the server instance
-    // The server instance is returned from the `configure_webserver` function.
-    // The server instance is returned as an `Ok` variant of the `Result` enum.
-    // The `Ok` variant contains the server instance.
-    return Ok(server);
-}
-
-fn create_html_response() -> String<256> {
-    // Create an HTML Response with two buttons and send different messages to MQTT Broker
-    let html = r#"
-     <html>
-         <body>
-             <h1>ESP32 Web Server</h1>
-             <button onclick="send('Hello')">Hello</button>
-             <button onclick="send('World')">World</button>
-             <script>
-                 function send(message) {
-                     fetch('/api/hello', {
-                         method: 'GET',
-                         headers: {
-                             'Content-Type': 'application/json'
-                         },
-                         body: JSON.stringify({ message: message })
-                     });
-                 }
-             </script>
-         </body>
-     </html>
- "#;
-    let var_name = String::from(html);
-    return var_name;
-}
-
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello Medium!")
+    Ok(())
 }

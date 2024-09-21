@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Click Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Send Data to ESP32 Web Server</h1>
+        <button id="button1">Send String 1</button>
+        <button id="button2">Send String 2</button>
+    </div>
+
+    <script>
+        // Function to send a POST request with the string data
+        function sendString(data) {
+            fetch("/", { // Change "/" to the correct endpoint on your server
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ message: data })
+            })
+            .then(response => response.text())  // Adjust based on what your server returns
+            .then(data => {
+                console.log("Response from server:", data);
+            })
+            .catch((error) => {
+                console.error("Error:", error);
+            });
+        }
+
+        // Event listener for Button 1
+        document.getElementById("button1").addEventListener("click", function() {
+            sendString("Hello from Button 1");
+        });
+
+        // Event listener for Button 2
+        document.getElementById("button2").addEventListener("click", function() {
+            sendString("Hello from Button 2");
+        });
+    </script>
+
+</body>
+</html>

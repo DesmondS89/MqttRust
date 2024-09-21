@@ -1,4 +1,4 @@
 [toolchain]
-#channel = "nightly"
-channel = "nightly-2024-06-30" # change this line
-components = ["rust-src"]
+channel = "esp"
+components = ["rustfmt", "rustc-dev"]
+targets = ["xtensa-esp32-none-elf"]
