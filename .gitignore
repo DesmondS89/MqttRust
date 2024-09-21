@@ -12,3 +12,4 @@ Cargo.lock
 
 # This is a build artifact
 .DS_Store
+.vscode/
