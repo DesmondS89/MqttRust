@@ -37,18 +37,26 @@ const WIFI_PASSWORD: &str = "";
 const MQTT_BROKER_URL: &str = "mqtt://broker.mqttdashboard.com:1883";
 const MQTT_TOPIC: &str = "testtopic/1";
 
-// const BUTTON_PIN: u32 = 0;
-// const LED_PIN: u32 = 2;
-// const LED_ON: u32 = 1;
-// const LED_OFF: u32 = 0;
-// const BUTTON_PRESSED: u32 = 0;
-// const BUTTON_RELEASED: u32 = 1;
-// const BUTTON_DEBOUNCE_DELAY: u32 = 50;
-// const BUTTON_LONG_PRESS_DELAY: u32 = 1000;
-
-// let mut button_state: u32 = BUTTON_RELEASED;
-// let mut button_press_time: u32 = 0;
-// let mut button: PinDriver;
+// pin
+const BUTTON_PIN: u32 = 0;
+const LED_PIN: u32 = 2;
+// button state
+const LED_ON: u32 = 1;
+const LED_OFF: u32 = 0;
+const BUTTON_PRESSED: u32 = 0;
+const BUTTON_RELEASED: u32 = 1;
+const BUTTON_DEBOUNCE_DELAY: u32 = 50;
+const BUTTON_LONG_PRESS_DELAY: u32 = 1000;
+const BUTTON_LONG_PRESSED: u32 = 2;
+const BUTTON_SHORT_PRESSED: u32 = 3;
+const BUTTON_LONG_PRESS: u32 = 4;
+const BUTTON_SHORT_PRESS: u32 = 5;
+const BUTTON_LONG_PRESS_RELEASE: u32 = 6;
+const BUTTON_SHORT_PRESS_RELEASE: u32 = 7;
+const BUTTON_LONG_PRESS_RELEASE_DELAY: u32 = 1000;
+const BUTTON_SHORT_PRESS_RELEASE_DELAY: u32 = 50;
+// delay
+const DELAY: u64 = 1;
 
 // endregion
 
@@ -192,19 +200,51 @@ fn main() -> anyhow::Result<()> {
     button.set_pull(Pull::Down)?;
 
     // Main task no longer needed, free up some memory
-
+    let mut button_state = BUTTON_RELEASED;
+    let mut button_press_time = 0;
     loop {
+       
         // we are using thread::sleep here to make sure the watchdog isn't triggered
         FreeRtos::delay_ms(10);
-
-        if button.is_high() {
-            led.set_low()?;
-            client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Bottom Released")?;
+        // check if the button is pressed and I want to use the debounce delay to make sure the button is pressed
+        // for a certain amount of time before I consider it as pressed
+        if button.is_low() {
+            // if the button is pressed, I want to check if the button state is released
+            if button_state == BUTTON_RELEASED {
+                // if the button state is released, I want to set the button state to pressed
+                button_state = BUTTON_PRESSED;
+                // I want to set the button press time to the current time
+                button_press_time = unsafe { esp_idf_sys::esp_timer_get_time() } / 1000;
+            }
+            // if the button state is pressed, I want to check if the button has been pressed for a long time
+            if button_state == BUTTON_PRESSED
+                && (unsafe { (esp_idf_sys::esp_timer_get_time() / 1000) - button_press_time })
+                    > (BUTTON_LONG_PRESS_DELAY as i64)
+            {
+                // if the button has been pressed for a long time, I want to set the button state to long pressed
+                button_state = BUTTON_LONG_PRESSED;
+                // I want to set the led to on
+                led.set_high()?;
+                // I want to publish a message to the mqtt broker
+                client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Button Long Pressed")?;
+            }
         } else {
-            led.set_high()?;
-            client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Bottom Pressed")?;
+            // if the button is released, I want to check if the button state is pressed
+            if button_state == BUTTON_PRESSED {
+                // if the button state is pressed, I want to set the button state to released
+                button_state = BUTTON_RELEASED;
+                // I want to set the led to off
+                led.set_low()?;
+                // I want to publish a message to the mqtt broker
+                client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Button Pressed")?;
+            }
+            // if the button state is long pressed, I want to set the button state to released
+            if button_state == BUTTON_LONG_PRESSED {
+                button_state = BUTTON_RELEASED;
+            }
         }
-        let duration = Duration::from_millis(10000);
+
+        let duration = Duration::from_secs(DELAY);
         sleep(duration);
     }
 }
