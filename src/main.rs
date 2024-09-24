@@ -193,20 +193,20 @@ fn main() -> anyhow::Result<()> {
 
     // Main task no longer needed, free up some memory
 
-    // loop {
-    //     // we are using thread::sleep here to make sure the watchdog isn't triggered
-    //     FreeRtos::delay_ms(10);
+    loop {
+        // we are using thread::sleep here to make sure the watchdog isn't triggered
+        FreeRtos::delay_ms(10);
 
-    //     if button.is_high() {
-    //         led.set_low()?;
-    //         client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Bottom Released")?;
-    //     } else {
-    //         led.set_high()?;
-    //         client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Bottom Pressed")?;
-    //     }
-    //     let duration = Duration::from_millis(10000);
-    //     sleep(duration);
-    // }
+        if button.is_high() {
+            led.set_low()?;
+            client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Bottom Released")?;
+        } else {
+            led.set_high()?;
+            client.publish(MQTT_TOPIC, QoS::AtLeastOnce, false, b"Bottom Pressed")?;
+        }
+        let duration = Duration::from_millis(10000);
+        sleep(duration);
+    }
     Ok(())
 }
 
