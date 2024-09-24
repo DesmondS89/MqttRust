@@ -207,7 +207,6 @@ fn main() -> anyhow::Result<()> {
         let duration = Duration::from_millis(10000);
         sleep(duration);
     }
-    Ok(())
 }
 
 // load the html form to be displayed on the web page when the server is accessed via a browser or client application
