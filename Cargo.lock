@@ -3,6 +3,22 @@
 version = 3
 
 [[package]]
+name = "MqttRust"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "embedded-svc",
+ "embuild",
+ "esp-idf-hal",
+ "esp-idf-svc",
+ "esp-idf-sys",
+ "heapless",
+ "log",
+ "serde",
+ "serde_urlencoded",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1442,22 +1458,6 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "test_1"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "embedded-svc",
- "embuild",
- "esp-idf-hal",
- "esp-idf-svc",
- "esp-idf-sys",
- "heapless",
- "log",
- "serde",
- "serde_urlencoded",
 ]
 
 [[package]]

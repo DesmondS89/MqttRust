@@ -1,5 +1,5 @@
 [package]
-name = "test_1"
+name = "MqttRust"
 version = "0.1.0"
 authors = ["d.schiavano <d.schiavano@360consulenza.com>"]
 edition = "2021"
@@ -7,7 +7,7 @@ resolver = "2"
 rust-version = "1.77"
 
 [[bin]]
-name = "test_1"
+name = "MqttRust"
 harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
 
 [profile.release]
